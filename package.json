@@ -1,0 +1,49 @@
+{
+  "name": "@stoe/octoherd-script-replace-node-ci",
+  "type": "module",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [
+    "octohed-script"
+  ],
+  "exports": "./script.js",
+  "bin": {
+    "octoherd-script-replace-node-ci": "./cli.js"
+  },
+  "author": {
+    "name": "Stefan Stölzle",
+    "email": "stefan@stoelzle.me",
+    "url": "https://github.com/stoe"
+  },
+  "repository": "github:stoe/octoherd-script-replace-node-ci",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16",
+    "npm": ">=8"
+  },
+  "scripts": {
+    "format": "npx prettier --config-precedence prefer-file --write . && eslint . --fix",
+    "pretest": "npx eslint-config-prettier .eslintrc.json",
+    "test": "eslint .",
+    "prepare": "husky install ./.github/husky"
+  },
+  "dependencies": {
+    "@octoherd/cli": "^3.4.3",
+    "octokit-plugin-create-pull-request": "^3.9.3"
+  },
+  "devDependencies": {
+    "@github/prettier-config": "^0.0.4",
+    "eslint": "^7.32.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-github": "^4.3.2",
+    "husky": "^7.0.2"
+  },
+  "prettier": "@github/prettier-config",
+  "husky": {
+    "hooks": {
+      "pre-commit": "./.github/husky/pre-commit",
+      "pre-push": "./.github/husky/pre-push"
+    }
+  }
+}

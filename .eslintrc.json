@@ -1,0 +1,20 @@
+{
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "module"
+  },
+  "env": {
+    "es6": true,
+    "node": true
+  },
+  "plugins": ["github"],
+  "extends": ["plugin:github/recommended"],
+  "rules": {
+    "camelcase": [
+      "error",
+      {
+        "allow": ["default_branch", "html_url", "node_id"]
+      }
+    ]
+  }
+}
