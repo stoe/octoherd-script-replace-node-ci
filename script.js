@@ -1,6 +1,14 @@
+import {configure, renderFile} from 'eta'
+// eslint-disable-next-line import/extensions
+import {createBranch, createCommitOnBranch, createPullRequest, getCurrentSha} from './utils.js'
 import {dirname, join} from 'path'
 import {fileURLToPath} from 'url'
 import {readFileSync} from 'fs'
+
+configure({
+  autoTrim: false,
+  cache: false
+})
 
 const PR_BRANCH = 'refs/heads/octoherd/replace-node-workflows'
 
@@ -9,9 +17,13 @@ const __dirname = dirname(__filename)
 
 const codeqlPath = join(__dirname, 'templates', 'codeql.yml')
 const codeqlContent = readFileSync(codeqlPath, 'utf8')
+const codeqlBuffer = Buffer.from(codeqlContent, 'utf-8').toString('base64')
 
 const testPath = join(__dirname, 'templates', 'test.yml')
 const testContent = readFileSync(testPath, 'utf8')
+const testBuffer = Buffer.from(testContent, 'utf-8').toString('base64')
+
+const publishPath = join(__dirname, 'templates', 'publish.yml.eta')
 
 /**
  * @param {import('@octoherd/cli').Octokit} octokit
@@ -44,87 +56,53 @@ export async function script(octokit, repository, {dryRun = false, verbose = fal
     return
   }
 
-  // https://docs.github.com/en/rest/reference/git#get-a-reference
-  const {
-    data: {
-      object: {sha}
-    }
-  } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
-    owner,
-    repo,
-    ref: `heads/${default_branch}`
-  })
+  // skip lerna repositories
+  // TODO: add lerna publish template
+  try {
+    await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path: 'lerna.json'
+    })
+
+    verbose && octokit.log.warn({change: false}, `skipping lerna repository`)
+    return
+  } catch (error) {
+    // do nothing
+  }
+
+  // get the current ref
+  const oid = await getCurrentSha(octokit, {owner, repo, default_branch})
 
   // create branch
   try {
-    // https://docs.github.com/en/graphql/reference/mutations#createref
     !dryRun &&
-      (await octokit.graphql(
-        `mutation ($repoID: ID!, $branch: String!, $oid: GitObjectID!) {
-    createRef(input: {
-      repositoryId: $repoID,
-      name: $branch,
-      oid: $oid
-    }) { clientMutationId }
-  }`,
-        {
-          repoID: node_id,
-          branch: PR_BRANCH,
-          oid: sha
-        }
-      ))
+      (await createBranch(octokit, {
+        node_id,
+        branch: PR_BRANCH,
+        oid
+      }))
   } catch (error) {
-    verbose && octokit.log.warn({change: false}, error.errors[0].message)
+    verbose && octokit.log.warn({change: false}, error.errors ? error.errors[0].message : error.message)
 
     // do nothing
   }
 
   // create commit on branch
   try {
-    // https://docs.github.com/en/graphql/reference/mutations#createcommitonbranch
-    !dryRun &&
-      (await octokit.graphql(
-        `mutation (
-  $nwo: String!,
-  $branch: String!,
-  $oid: GitObjectID!,
-  ${isPrivate ? '' : `$codeql: Base64String!`},
-  $test: Base64String!
-) {
-  createCommitOnBranch(
-    input: {
-      branch: { repositoryNameWithOwner: $nwo, branchName: $branch }
-      expectedHeadOid: $oid
-      message: { headline: "🤖 Replace Node workflows" }
-      fileChanges: {
-        additions: [
-          ${
-            isPrivate
-              ? ''
-              : `{ 
-            path: ".github/workflows/codeql.yml",
-            contents: $codeql
-          },`
-          }
-          {
-            path: ".github/workflows/test.yml",
-            contents: $test
-          }
-        ]
-      }
+    if (!dryRun) {
+      const publishContent = await renderFile(publishPath, {isPrivate})
+
+      await createCommitOnBranch(octokit, {
+        nwo: `${owner}/${repo}`,
+        branch: PR_BRANCH,
+        oid,
+        codeql: codeqlBuffer,
+        test: testBuffer,
+        publish: Buffer.from(publishContent, 'utf-8').toString('base64'),
+        isPrivate
+      })
     }
-  ) {
-    clientMutationId
-  }
-}`,
-        {
-          nwo: `${owner}/${repo}`,
-          branch: PR_BRANCH,
-          oid: sha,
-          codeql: Buffer.from(codeqlContent, 'utf-8').toString('base64'),
-          test: Buffer.from(testContent, 'utf-8').toString('base64')
-        }
-      ))
   } catch (error) {
     octokit.log.error({change: false, error}, error.errors[0].message)
     return
@@ -133,48 +111,27 @@ export async function script(octokit, repository, {dryRun = false, verbose = fal
   // create pull request
   try {
     if (!dryRun) {
-      // https://docs.github.com/en/graphql/reference/mutations#createpullrequest
-      const {
-        createPullRequest: {
-          pullRequest: {url}
-        }
-      } = await octokit.graphql(
-        `mutation ($repoID: ID!, $base: String!, $head: String!) {
-    createPullRequest(input: {
-      repositoryId: $repoID,
-      baseRefName: $base,
-      headRefName: $head,
-      title: "🤖 Replace Node workflows",
-      body: "via [@stoe/octoherd-script-replace-node-ci](https://github.com/stoe/octoherd-script-replace-node-ci)",
-    }) {
-      pullRequest {
-        url
-      }
-    }
-  }`,
-        {
-          repoID: node_id,
-          base: `refs/heads/${default_branch}`,
-          head: PR_BRANCH
-        }
-      )
-
-      octokit.log.info({change: true}, `pull request created ${url}`)
+      await createPullRequest(octokit, {
+        node_id,
+        base: `refs/heads/${default_branch}`,
+        head: PR_BRANCH
+      })
     } else {
       octokit.log.info(
         {
           change: false,
           owner,
           repo,
+          private: isPrivate,
           head: default_branch,
           base: PR_BRANCH.replace('refs/heads/', ''),
-          files: [codeqlPath.replace(`${__dirname}/templates/`, ''), testPath.replace(`${__dirname}/templates/`, '')],
-          sha: sha.substr(0, 7)
+          workflows: [codeqlPath, testPath, publishPath].map(file => file.replace(`${__dirname}/templates/`, '')),
+          sha: oid.substr(0, 7)
         },
         '[DRY RUN] pull request created'
       )
     }
   } catch (error) {
-    octokit.log.error({change: false, error}, error.errors[0].message)
+    octokit.log.error({change: false, error}, error.errors ? error.errors[0].message : error.message)
   }
 }
