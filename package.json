@@ -29,12 +29,12 @@
     "prepare": "husky install ./.github/husky"
   },
   "dependencies": {
-    "@octoherd/cli": "^3.4.3",
+    "@octoherd/cli": "^3.4.4",
     "octokit-plugin-create-pull-request": "^3.9.3"
   },
   "devDependencies": {
     "@github/prettier-config": "^0.0.4",
-    "eslint": "^7.32.0",
+    "eslint": "^7.32.0, <8",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-github": "^4.3.2",
     "husky": "^7.0.2"
