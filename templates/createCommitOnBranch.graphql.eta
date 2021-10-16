@@ -1,0 +1,35 @@
+# <%= it.nwo %>
+mutation (
+  $nwo: String!,
+  $branch: String!,
+  $oid: GitObjectID!,<% if (!it.isPrivate) { %>
+  $codeql: Base64String!,<% } %>
+  $test: Base64String!<% if (!it.isPrivate) { %>,
+  $publish: Base64String!<% } %>
+) {
+  createCommitOnBranch(
+    input: {
+      branch: { repositoryNameWithOwner: $nwo, branchName: $branch }
+      expectedHeadOid: $oid
+      message: { headline: "🤖 Replace Node workflows" }
+      fileChanges: {
+        additions: [<% if (!it.isPrivate) { %>
+          {
+            path: ".github/workflows/codeql.yml",
+            contents: $codeql
+          },<% } %>
+          {
+            path: ".github/workflows/test.yml",
+            contents: $test
+          }<% if (!it.isPrivate) { %>,
+          {
+            path: ".github/workflows/publish.yml",
+            contents: $publish
+          }<% } %>
+        ]
+      }
+    }
+  ) {
+    clientMutationId
+  }
+}

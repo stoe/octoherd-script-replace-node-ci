@@ -1,0 +1,15 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  publish:
+    uses: stoe/policies/.github/workflows/policy-node-publish.yml@main
+    with:<% if (!it.isPrivate) { %>
+      npm: true<% } %>
+      gh: true<% if (!it.isPrivate) { %>
+    secrets:
+      npm_token: ${{ secrets.NPM_TOKEN }}<% } %>

@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@octoherd/cli": "^3.4.4",
+    "eta": "^1.12.3",
     "octokit-plugin-create-pull-request": "^3.9.3"
   },
   "devDependencies": {
