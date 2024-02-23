@@ -28,7 +28,7 @@
     "prepare": "node ./.github/husky/prepare.cjs"
   },
   "dependencies": {
-    "@octoherd/cli": "^3.4.4",
+    "@octoherd/cli": "^4.0.2",
     "eta": "^1.12.3",
     "octokit-plugin-create-pull-request": "^3.9.3"
   },
